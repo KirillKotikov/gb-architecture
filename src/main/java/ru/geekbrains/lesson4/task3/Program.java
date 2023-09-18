@@ -1,10 +1,13 @@
 package ru.geekbrains.lesson4.task3;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 
 public class Program {
+
+    private static final SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH");
 
 /**
  * Разработать контракты и компоненты системы "Покупка онлайн билетов на автобус в час пик".
@@ -23,14 +26,15 @@ public class Program {
         Core core = new Core();
         MobileApp mobileApp = new MobileApp(core.getTicketProvider(), core.getCustomerProvider());
         BusStation busStation = new BusStation(core.getTicketProvider());
-
-        if (mobileApp.buyTicket("11000000221")){
+        if (mobileApp.buyTicket("1111111111111111")){
             System.out.println("Клиент успешно купил билет.");
-            mobileApp.searchTicket(new Date());
-            /*Collection<Ticket> tickets = mobileApp.getTickets();
+            Date date = new Date();
+            date.setTime(1694998359337L);
+            mobileApp.searchTicket(date);
+            Collection<Ticket> tickets = mobileApp.getTickets();
             if (busStation.checkTicket(tickets.stream().findFirst().get().getQrcode())){
                 System.out.println("Клиент успешно прошел в автобус.");
-            }*/
+            }
         }
 
 
@@ -72,7 +76,7 @@ class Customer{
 
     private final int id;
 
-    private Collection<Ticket> tickets;
+    private Collection<Ticket> tickets = new ArrayList<>();
 
     {
         id = ++counter;
@@ -106,6 +110,16 @@ class Ticket{
     private String qrcode;
 
     private boolean enable = true;
+
+    public Ticket() {
+    }
+
+    public Ticket(int id, int customerId, Date date, String qrcode) {
+        this.id = id;
+        this.customerId = customerId;
+        this.date = date;
+        this.qrcode = qrcode;
+    }
 
     public void setEnable(boolean enable) {
         this.enable = enable;
@@ -143,9 +157,16 @@ class Database{
     private Collection<Customer> customers = new ArrayList<>();
 
     public Database() {
-        tickets.add(new Ticket());
-        tickets.add(new Ticket());
-        tickets.add(new Ticket());
+        Date date = new Date();
+        date.setTime(1694998359337L);
+        for (int i = 0; i < 10; i++) {
+            tickets.add(new Ticket(
+                    i,
+                    i,
+                    date,
+                    "qrcode"
+            ));
+        }
     }
 
     public Collection<Ticket> getTickets() {
@@ -206,7 +227,9 @@ class MobileApp{
     }
 
     public void searchTicket(Date date){
-        customer.setTickets(ticketProvider.searchTicket(customer.getId(), new Date()));
+        date = new Date();
+        date.setTime(1694998359337L);
+        customer.setTickets(ticketProvider.searchTicket(customer.getId(), date));
     }
 
     public boolean buyTicket(String cardNo){
@@ -227,21 +250,46 @@ class TicketProvider{
 
     public Collection<Ticket> searchTicket(int clientId, Date date){
 
-        Collection<Ticket> tickets = new ArrayList<>();
-        for (Ticket ticket: database.getTickets()) {
-            if (ticket.getCustomerId() == clientId && ticket.getDate().equals(date))
-                tickets.add(ticket);
+        // Предусловие
+        if (clientId <= 0) {
+            throw new RuntimeException("Идентификатор клиента не может быть равен или меньше нуля!");
         }
+        if (date == null) {
+            throw new RuntimeException("Дата для поиска билета не может быть пустой (null)");
+        }
+
+        Collection<Ticket> tickets = new ArrayList<>();
+        // Инвариант
+        findTicketsByClientIdAndDate(clientId, date, tickets);
+
+        // Постусловие
+        // Считаю, что возвращать пустой список в данной ситуации будет нормой.
+
         return tickets;
 
     }
 
     public boolean buyTicket(int clientId, String cardNo){
 
+        // Предусловие
+        if (clientId <= 0) {
+            throw new RuntimeException("Идентификатор клиента не может быть равен или меньше нуля!");
+        }
+        if (cardNo == null || (cardNo.length() != 16)) {
+            throw new RuntimeException("Номер карты должен состоять из 16 цифр");
+        }
+
         int orderId = database.createTicketOrder(clientId);
         double amount = database.getTicketAmount();
-        return paymentProvider.buyTicket(orderId,  cardNo, amount);
 
+        boolean isBought = paymentProvider.buyTicket(orderId, cardNo, amount);
+
+        if (!isBought) {
+            throw new RuntimeException("Произошла ошибка при покупке билета. " +
+                    "Повторите снова или обратитесь в техническую поддержку.");
+        }
+
+        return isBought;
     }
 
     public boolean checkTicket(String qrcode){
@@ -255,6 +303,12 @@ class TicketProvider{
         return false;
     }
 
+    private void findTicketsByClientIdAndDate(int clientId, Date date, Collection<Ticket> tickets) {
+        for (Ticket ticket: database.getTickets()) {
+            if (ticket.getCustomerId() == clientId && ticket.getDate().equals(date))
+                tickets.add(ticket);
+        }
+    }
 
 }
 
